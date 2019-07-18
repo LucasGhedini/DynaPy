@@ -8,6 +8,7 @@ from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from matplotlib.backends.backend_qt4agg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib import pyplot as plt
+from copy import deepcopy as copy
 
 class TextBrowser(QMainWindow, textBrowserGUI):
 
@@ -28,6 +29,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.inputData = inputData
         self.outputData = outputData
         self.setup_inputs()
+        self.setup_assembly()
         self.setup_equation()
         self.setup_outputs()
         self.showMaximized()
@@ -68,6 +70,167 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.StructDetailBtn.clicked.connect(self.structure_input_details)
         self.TLCDdetailBtn.clicked.connect(self.tlcd_input_details)
 
+    def setup_assembly(self):
+        self.assemblyMatrixCB.currentIndexChanged.connect(self.assembly_redraw)
+        self.assemblyModeCB.currentIndexChanged.connect(self.assembly_redraw)
+        self.assemblyPreviousBtn.clicked.connect(self.assembly_previous)
+        self.assemblyNextBtn.clicked.connect(self.assembly_next)
+
+        self.lines = len(self.inputData.stories)
+        eqType = get_text(self.assemblyModeCB)
+        hasTLCD = self.inputData.tlcd is not None
+        if hasTLCD:
+            self.lines += 1
+        
+        for i in range(self.lines):
+            self.assemblyTable.insertRow(0)
+            self.assemblyTable.insertColumn(0)
+
+        self.massTableSymbolic = []
+        self.massTableSymbolic.append([['0' for j in range(self.lines)] for k in range(self.lines)])
+        self.massTableNumeric = []
+        self.massTableNumeric.append([['0' for j in range(self.lines)] for k in range(self.lines)])
+        self.massState = 0
+        for i in range(self.lines):
+            if i == 0:
+                m = [['0' for j in range(self.lines)] for k in range(self.lines)]
+                m[i][i] = f'ms{i+1}'
+                self.massTableSymbolic.append(m)
+                # Adicionar numerico
+            elif (i < self.lines-1) or (i == self.lines - 1 and (not hasTLCD)):
+                m = copy(self.massTableSymbolic[-1])
+                m[i][i] = f'ms{i+1}'
+                self.massTableSymbolic.append(m)
+            elif i == self.lines - 1 and hasTLCD:
+                m = copy(self.massTableSymbolic[-1])
+                m[i][i] = f'mf'
+                m[i-1][i-1] = f'ms{i} + mf'
+                m[i-1][i] = f'(b/L)mf'
+                m[i][i-1] = f'(b/L)mf'
+                self.massTableSymbolic.append(m)
+
+        self.dampingTableSymbolic = []
+        self.dampingTableSymbolic.append([['0' for j in range(self.lines)] for k in range(self.lines)])
+        self.dampingTableNumeric = []
+        self.dampingTableNumeric.append([['0' for j in range(self.lines)] for k in range(self.lines)])
+        self.dampingState = 0
+        for i in range(self.lines):
+            if i == 0:
+                m = [['0' for j in range(self.lines)] for k in range(self.lines)]
+                m[i][i] = f'cs{i+1}'
+                self.dampingTableSymbolic.append(m)
+                # Adicionar numerico
+            elif (i < self.lines-1) or (i == self.lines - 1 and (not hasTLCD)):
+                m = copy(self.dampingTableSymbolic[-1])
+                m[i][i] = f'cs{i+1}'
+                self.dampingTableSymbolic.append(m)
+            elif i == self.lines - 1 and hasTLCD:
+                m = copy(self.dampingTableSymbolic[-1])
+                m[i][i] = f'cf(t)'
+                self.dampingTableSymbolic.append(m)
+
+        self.stiffnessTableSymbolic = []
+        self.stiffnessTableSymbolic.append([['0' for j in range(self.lines)] for k in range(self.lines)])
+        self.stiffnessTableNumeric = []
+        self.stiffnessTableNumeric.append([['0' for j in range(self.lines)] for k in range(self.lines)])
+        self.stiffnessState = 0
+        for i in range(self.lines):
+            if i == 0:
+                m = [['0' for j in range(self.lines)] for k in range(self.lines)]
+                m[i][i] = f'ks{i+1}'
+                self.stiffnessTableSymbolic.append(m)
+                # Adicionar numerico
+            elif (i < self.lines-1) or (i == self.lines - 1 and (not hasTLCD)):
+                m = copy(self.stiffnessTableSymbolic[-1])
+                m[i][i] = f'ks{i+1}'
+                m[i-1][i-1] = f'ks{i} + ks{i+1}'
+                m[i-1][i] = f'- ks{i+1}'
+                m[i][i-1] = f'- ks{i+1}'
+                self.stiffnessTableSymbolic.append(m)
+            elif i == self.lines - 1 and hasTLCD:
+                m = copy(self.stiffnessTableSymbolic[-1])
+                m[i][i] = f'kf'
+                self.stiffnessTableSymbolic.append(m)
+
+        self.assembly_redraw()
+
+
+    def assembly_previous(self):
+        matrix = get_text(self.assemblyMatrixCB)
+        if  matrix == 'Mass':
+            try:
+                assert self.massState > 0
+                self.massState -= 1
+                self.assembly_redraw()
+            except:
+                pass
+        elif  matrix == 'Damping':
+            try:
+                assert self.dampingState > 0
+                self.dampingState -= 1
+                self.assembly_redraw()
+            except:
+                pass
+        elif  matrix == 'Stiffness':
+            try:
+                assert self.stiffnessState > 0
+                self.stiffnessState -= 1
+                self.assembly_redraw()
+            except:
+                pass
+
+    def assembly_next(self):
+        matrix = get_text(self.assemblyMatrixCB)
+        if  matrix == 'Mass':
+            try:
+                assert self.massState < self.lines
+                self.massState += 1
+                self.assembly_redraw()
+            except:
+                pass
+        elif  matrix == 'Damping':
+            try:
+                assert self.dampingState < self.lines
+                self.dampingState += 1
+                self.assembly_redraw()
+            except:
+                pass
+        elif  matrix == 'Stiffness':
+            try:
+                assert self.stiffnessState < self.lines
+                self.stiffnessState += 1
+                self.assembly_redraw()
+            except:
+                pass
+
+    def assembly_redraw(self):
+        matrix = get_text(self.assemblyMatrixCB)
+        mode = get_text(self.assemblyModeCB)
+
+        if mode == 'Symbolic' and matrix == 'Mass':
+            table = self.massTableSymbolic
+            state = self.massState
+        elif mode == 'Symbolic' and matrix == 'Damping':
+            table = self.dampingTableSymbolic
+            state = self.dampingState
+        elif mode == 'Symbolic' and matrix == 'Stiffness':
+            table = self.stiffnessTableSymbolic
+            state = self.stiffnessState
+        elif mode == 'Numeric' and matrix == 'Mass':
+            table = self.massTableNumeric
+            state = self.massState
+        elif mode == 'Numeric' and matrix == 'Damping':
+            table = self.dampingTableNumeric
+            state = self.dampingState
+        elif mode == 'Numeric' and matrix == 'Stiffness':
+            table = self.stiffnessTableNumeric
+            state = self.stiffnessState
+        
+        for i in range(self.lines):
+            for j in range(self.lines):
+                m = table[state][i][j]
+                self.assemblyTable.setCellWidget(i, j, QLabel(m))
+
     def setup_equation(self):
         # Equation Graphics add figure
         pixmap = QPixmap(r'./img/equations.png')
@@ -76,6 +239,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         # Equation Canvas
         self.equationWidget.equationCanvas = PltCanvas()
+        self.equationWidget.mpl_toolbar = NavigationToolbar(self.equationWidget.equationCanvas, self)
+        self.equationWidget.mpl_toolbar.pan()
+        self.equationWidget.mpl_toolbar.hide()
         self.equationWidget.gridLayout = QGridLayout()
         self.equationWidget.gridLayout.addWidget(self.equationWidget.equationCanvas, 1, 1)
         self.equationWidget.setLayout(self.equationWidget.gridLayout)
@@ -102,74 +268,74 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         ids = self.inputData.stories
         idf = self.inputData.tlcd
         lines = len(self.inputData.stories)
-        type = get_text(self.equationTypeComboBox)
+        eqType = get_text(self.equationTypeComboBox)
         hasTLCD = self.inputData.tlcd is not None
         if hasTLCD:
             lines += 1
         t = ''
         n = int(get_text(self.equationLineComboBox))
         
-        if type == "Symbolic":
+        if eqType == "Symbolic":
             if n == 1:
-                t += f'$m_{{s{n}}}\ddot{{x}}_{{s{n}}}'
-                t += f'+c_{{s{n}}}\dot{{x}}_{{s{n}}}'
-                t += f'+(k_{{s{n}}}+k_{{s{n+1}}})x_{{s{n}}}'
-                t += f'-k_{{s{n+1}}}x_{{s{n+1}}}'
+                t += f'$m_{{s{n}}}\ddot{{x}}_{{s{n}}}(t)'
+                t += f'+c_{{s{n}}}\dot{{x}}_{{s{n}}}(t)'
+                t += f'+(k_{{s{n}}}+k_{{s{n+1}}})x_{{s{n}}}(t)'
+                t += f'-k_{{s{n+1}}}x_{{s{n+1}}}(t)'
                 t += f'=F_{{q{n}}}(t)$'
             elif (hasTLCD and n < lines-1) or ((not hasTLCD) and n < lines):
-                t += f'$m_{{s{n}}}\ddot{{x}}_{{s{n}}}'
-                t += f'+c_{{s{n}}}\dot{{x}}_{{s{n}}}'
-                t += f'-k_{{s{n}}}x_{{s{n-1}}}'
-                t += f'+(k_{{s{n}}}+k_{{s{n+1}}})x_{{s{n}}}'
-                t += f'-k_{{s{n+1}}}x_{{s{n+1}}}'
+                t += f'$m_{{s{n}}}\ddot{{x}}_{{s{n}}}(t)'
+                t += f'+c_{{s{n}}}\dot{{x}}_{{s{n}}}(t)'
+                t += f'-k_{{s{n}}}x_{{s{n-1}}}(t)'
+                t += f'+(k_{{s{n}}}+k_{{s{n+1}}})x_{{s{n}}}(t)'
+                t += f'-k_{{s{n+1}}}x_{{s{n+1}}}(t)'
                 t += f'=F_{{q{n}}}(t)$'
             elif hasTLCD and n == lines-1:
-                t += f'$(m_{{s{n}}}+m_{{f}})\ddot{{x}}_{{s{n}}} + \\frac{{b}}{{L}}m_{{f}}\ddot{{x}}_{{f}}'
-                t += f'+c_{{s{n}}}\dot{{x}}_{{s{n}}}'
-                t += f'-k_{{s{n}}}x_{{s{n-1}}}'
-                t += f'+k_{{s{n}}}x_{{s{n}}}'
+                t += f'$(m_{{s{n}}}+m_{{f}})\ddot{{x}}_{{s{n}}} + \\frac{{b}}{{L}}m_{{f}}\ddot{{x}}_{{f}}(t)'
+                t += f'+c_{{s{n}}}\dot{{x}}_{{s{n}}}(t)'
+                t += f'-k_{{s{n}}}x_{{s{n-1}}}(t)'
+                t += f'+k_{{s{n}}}x_{{s{n}}}(t)'
                 t += f'=F_{{q{n}}}(t)$'
             elif hasTLCD and n == lines:
-                t += f'$\\frac{{b}}{{L}}m_{{f}}\ddot{{x}}_{{s{n-1}}} + m_{{f}}\ddot{{x}}_{{f}}'
-                t += f'+c_{{f}}\dot{{x}}_{{f}}'
-                t += f'+k_{{f}}x_{{f}}'
+                t += f'$\\frac{{b}}{{L}}m_{{f}}\ddot{{x}}_{{s{n-1}}} + m_{{f}}\ddot{{x}}_{{f}}(t)'
+                t += f'+c_{{f}}\dot{{x}}_{{f}}(t)'
+                t += f'+k_{{f}}x_{{f}}(t)'
                 t += f'=\\frac{{b}}{{L}}F_{{qf}}(t)$'
             elif (not hasTLCD) and n == lines:
-                t += f'$m_{{s{n}}}\ddot{{x}}_{{s{n}}}'
-                t += f'+c_{{s{n}}}\dot{{x}}_{{s{n}}}'
-                t += f'-k_{{s{n}}}x_{{s{n-1}}}'
-                t += f'+k_{{s{n}}}x_{{s{n}}}'
+                t += f'$m_{{s{n}}}\ddot{{x}}_{{s{n}}}(t)'
+                t += f'+c_{{s{n}}}\dot{{x}}_{{s{n}}}(t)'
+                t += f'-k_{{s{n}}}x_{{s{n-1}}}(t)'
+                t += f'+k_{{s{n}}}x_{{s{n}}}(t)'
                 t += f'=F_{{q{n}}}(t)$'
-        if type == "Numeric":
+        if eqType == "Numeric":
             if n == 1:
-                t += f'$({ids[n].mass:1.2E})\ddot{{x}}_{{s{n}}}'
-                t += f'+({ids[n].dampingCoefficient:1.2E})\dot{{x}}_{{s{n}}}'
-                t += f'+({ids[n].stiffness + ids[n+1].stiffness:1.2E})x_{{s{n}}}'
-                t += f'-({ids[n].stiffness:1.2E})x_{{s{n+1}}}'
+                t += f'$({ids[n].mass:1.2E})\ddot{{x}}_{{s{n}}}(t)'
+                t += f'+({ids[n].dampingCoefficient:1.2E})\dot{{x}}_{{s{n}}}(t)'
+                t += f'+({ids[n].stiffness + ids[n+1].stiffness:1.2E})x_{{s{n}}}(t)'
+                t += f'-({ids[n].stiffness:1.2E})x_{{s{n+1}}}(t)'
                 t += f'=-({ids[n].mass:1.2E})\ddot{{x}}_{{q}}(t)$'
             elif (hasTLCD and n < lines-1) or ((not hasTLCD) and n < lines):
-                t += f'$({ids[n].mass:1.2E})\ddot{{x}}_{{s{n}}}'
-                t += f'+({ids[n].dampingCoefficient:1.2E})\dot{{x}}_{{s{n}}}'
-                t += f'-({ids[n].stiffness:1.2E})x_{{s{n-1}}}'
-                t += f'+({ids[n].stiffness + ids[n+1].stiffness:1.2E})x_{{s{n}}}'
-                t += f'-({ids[n+1].stiffness:1.2E})x_{{s{n+1}}}'
+                t += f'$({ids[n].mass:1.2E})\ddot{{x}}_{{s{n}}}(t)'
+                t += f'+({ids[n].dampingCoefficient:1.2E})\dot{{x}}_{{s{n}}}(t)'
+                t += f'-({ids[n].stiffness:1.2E})x_{{s{n-1}}}(t)'
+                t += f'+({ids[n].stiffness + ids[n+1].stiffness:1.2E})x_{{s{n}}}(t)'
+                t += f'-({ids[n+1].stiffness:1.2E})x_{{s{n+1}}}(t)'
                 t += f'=-({ids[n].mass:1.2E})\ddot{{x}}_{{q}}(t)$'
             elif hasTLCD and n == lines-1:
-                t += f'$({ids[n].mass + idf.mass:1.2E})\ddot{{x}}_{{s{n}}} + ({idf.width/idf.length*idf.mass:1.2E})\ddot{{x}}_{{f}}'
-                t += f'+({ids[n].dampingCoefficient:1.2E})\dot{{x}}_{{s{n}}}'
-                t += f'-({ids[n].stiffness:1.2E})x_{{s{n-1}}}'
-                t += f'+({ids[n].stiffness:1.2E})x_{{s{n}}}'
+                t += f'$({ids[n].mass + idf.mass:1.2E})\ddot{{x}}_{{s{n}}} + ({idf.width/idf.length*idf.mass:1.2E})\ddot{{x}}_{{f}}(t)'
+                t += f'+({ids[n].dampingCoefficient:1.2E})\dot{{x}}_{{s{n}}}(t)'
+                t += f'-({ids[n].stiffness:1.2E})x_{{s{n-1}}}(t)'
+                t += f'+({ids[n].stiffness:1.2E})x_{{s{n}}}(t)'
                 t += f'=-({ids[n].mass + idf.mass:1.2E})\ddot{{x}}_{{q}}(t)$'
             elif hasTLCD and n == lines:
-                t += f'$({idf.width/idf.length*idf.mass:1.2E})\ddot{{x}}_{{s{n-1}}} + ({idf.mass:1.2E})\ddot{{x}}_{{f}}'
-                t += f'+c_{{f}}(t)\dot{{x}}_{{f}}'
-                t += f'+({idf.stiffness:1.2E})x_{{f}}'
+                t += f'$({idf.width/idf.length*idf.mass:1.2E})\ddot{{x}}_{{s{n-1}}} + ({idf.mass:1.2E})\ddot{{x}}_{{f}}(t)'
+                t += f'+c_{{f}}(t)\dot{{x}}_{{f}}(t)'
+                t += f'+({idf.stiffness:1.2E})x_{{f}}(t)'
                 t += f'=({idf.width/idf.length*idf.mass:1.2E})\ddot{{x}}_{{q}}(t)$'
             elif (not hasTLCD) and n == lines:
-                t += f'$({ids[n].mass:1.2E})\ddot{{x}}_{{s{n}}}'
-                t += f'+({ids[n].dampingCoefficient:1.2E})\dot{{x}}_{{s{n}}}'
-                t += f'-({ids[n].stiffness:1.2E})x_{{s{n-1}}}'
-                t += f'+({ids[n].stiffness:1.2E})x_{{s{n}}}'
+                t += f'$({ids[n].mass:1.2E})\ddot{{x}}_{{s{n}}}(t)'
+                t += f'+({ids[n].dampingCoefficient:1.2E})\dot{{x}}_{{s{n}}}(t)'
+                t += f'-({ids[n].stiffness:1.2E})x_{{s{n-1}}}(t)'
+                t += f'+({ids[n].stiffness:1.2E})x_{{s{n}}}(t)'
                 t += f'=-({ids[n].mass:1.2E})\ddot{{x}}_{{q}}(t)$'
 
         # Draw equation
@@ -314,7 +480,7 @@ Water Height = {self.inputData.tlcd.waterHeight}
 Length = {self.inputData.tlcd.length}
 Mass = {self.inputData.tlcd.mass}
 Stiffness = {self.inputData.tlcd.stiffness}
-Natural Frequency = {self.inputData.tlcd.naturalFrequency}
+Natural Frequency = {self.inputData.tlcd.naturalFrequency:.2f} rad/s
 """
 #         if self.inputData.tlcd.type == 'Basic TLCD':
 #             s += f"""Gas Height = {self.inputData.tlcd.gasHeight}
@@ -325,9 +491,9 @@ Natural Frequency = {self.inputData.tlcd.naturalFrequency}
 Gas Pressure = {self.inputData.tlcd.gasPressure}
 """
         
-        s += f"Specific Mass = {self.inputData.configurations.liquidSpecificMass} kg/m^3"
-        s += f"Kinetic Viscosity = {self.inputData.configurations.kineticViscosity} m^2/s"
-        s += f"Gravity Acceleration = {self.inputData.configurations.gravity} m/s^2 "
+        s += f"Specific Mass = {self.inputData.configurations.liquidSpecificMass} kg/m³\n"
+        s += f"Kinetic Viscosity = {self.inputData.configurations.kineticViscosity} m/s²\n"
+        s += f"Gravity Acceleration = {self.inputData.configurations.gravity} m/s² \n"
         s += f"Pipe Roughness = {self.inputData.configurations.pipeRoughness}"
         self.tlcdDetailWindow.textBrowser.setText(s)
 
@@ -373,4 +539,3 @@ if __name__ == '__main__':
     gui = MainWindow()
     gui.show()
     sys.exit(app.exec_())
-    # comment

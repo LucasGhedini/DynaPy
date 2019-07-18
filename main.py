@@ -1548,8 +1548,7 @@ def main():
         fileName = './save/TESTE.dpfl'
         GUI.open_file(fileName=fileName)
         GUI.run_dynamic_response()
-        # GUI.actionRunDynamicResponse.trigger()
-        # GUI.actionStep_By_Step_Mode.trigger()
+        GUI.actionStep_By_Step_Mode.trigger()
     sys.exit(app.exec_())
 
 
